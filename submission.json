@@ -1,0 +1,119 @@
+{
+  "api_key": "IVY26-6E629ED6FBB5",
+  "candidate": {
+    "name": "Kumar Sundram",
+    "email": "your_email@mnnit.ac.in",
+    "repo_url": "https://github.com/AajayRajbhar/ivy-assignment",
+    "demo_url": "https://your-app.vercel.app"
+  },
+  "answers": {
+    "dataset_audit_ref": "IVY-AUDIT-64433F76",
+    "total_listing_records": 950,
+    "unique_properties": 950,
+    "active_listings": 746,
+    "corrupt_listing_ids": [
+      "MAG-3000006", "MAG-3000077", "MAG-3000081", "MAG-3000233", "MAG-3000255", 
+      "MAG-3000321", "MAG-3000339", "MAG-3000372", "MAG-3000374", "MAG-3000400", 
+      "MAG-3000534", "MAG-3000546", "MAG-3000584", "MAG-3000726", "MAG-3000774", 
+      "MAG-3000776", "MAG-3000798", "MAG-3000861", "MAG-3000904", "MAG-3000976", 
+      "MAG-3000997", "MAG-3001035", "MAG-3001127", "MAG-3001176", "MAG-3001218", 
+      "MAG-3001291", "MAG-3001327", "MAG-3001397", "MAG-3001452", "MAG-3001480", 
+      "MAG-3001519", "MAG-3001530", "MAG-3001573", "MAG-3001667", "MAG-3001812", 
+      "MAG-3001860", "MAG-3001862", "MAG-3002005", "MAG-3002016", "MAG-3002018", 
+      "MAG-3002116", "MAG-3002135", "MAG-3002275", "MAG-3002336", "MAG-3002351", 
+      "MAG-3002358", "MAG-3002387", "MAG-3002404", "MAG-3002443", "MAG-3002468", 
+      "MAG-3002469", "MAG-3002568", "MAG-3002573", "MAG-3002610", "MAG-3002673", 
+      "MAG-3002771", "MAG-3002886", "MAG-3003021", "MAG-3003030", "MAG-3003048", 
+      "MAG-3003108", "MAG-3003148", "MAG-3003251", "MAG-3003275", "MAG-3003299", 
+      "MAG-3003318", "MAG-3003365", "MAG-3003434", "MAG-3003458", "MAG-3003580", 
+      "MAG-3003661", "MAG-3003741"
+    ],
+    "total_monthly_rent": 1747600,
+    "avg_price_per_sqft_2bhk": 10536.26,
+    "costliest_project": {
+      "project_id": "P30015",
+      "price_max_inr": 97800000
+    },
+    "listings_last_7_days": 36,
+    "fake_listing_ids": [
+      "DWE-3000316", "DWE-3002226", "DWE-3003650", "MAG-3000989", "MAG-3002001", 
+      "MAG-3002351", "SQU-3000022", "SQU-3000070", "SQU-3000654", "SQU-3001670", 
+      "ZER-3001051", "ZER-3001394", "ZER-3001479", "ZER-3003489"
+    ],
+    "projects_with_wrong_listing_count": 126
+  },
+  "findings": [
+    {
+      "endpoint": "/auth/login",
+      "category": "auth",
+      "documented": "Tokens are valid for 24 hours, so a single login is enough for one working session. There is no refresh flow.",
+      "actual": "Tokens expire in exactly 15 minutes (expires_in: 900), and the API actively returns a refresh_token meant for a secret refresh flow.",
+      "how_found": "Inspected the raw JSON response payload from a successful POST to /auth/login.",
+      "impact": "Frontend applications will unexpectedly log users out after 15 minutes unless an undocumented refresh polling loop is built.",
+      "evidence": []
+    },
+    {
+      "endpoint": "*",
+      "category": "pagination",
+      "documented": "Every collection endpoint takes page and limit. Collection responses are shaped with total, page, and page_size.",
+      "actual": "Pagination relies entirely on offset and limit query parameters. The response payload returns offset, count, and has_more booleans instead of pages.",
+      "how_found": "Tested the /v1/listings endpoint and observed the actual pagination metadata keys returned in the raw JSON response.",
+      "impact": "Standard 1-indexed page-based data fetching will fail completely. Applications must implement offset-based extraction loops.",
+      "evidence": []
+    },
+    {
+      "endpoint": "*",
+      "category": "timestamps",
+      "documented": "Timestamps are ISO 8601, UTC, Z suffix, everywhere in the API.",
+      "actual": "Timestamps entirely lack a timezone identifier (Z suffix) and are served in local naive time (IST).",
+      "how_found": "Inspected the posted_at string format directly in the raw listings payload.",
+      "impact": "Time-based filtering calculations will be offset by 5.5 hours if dates are parsed strictly as UTC.",
+      "evidence": ["DWE-3002501", "SQU-3001712"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "units",
+      "documented": "Area is in square feet, integer, everywhere in the API.",
+      "actual": "Several listings (primarily from the 'MAG-' source) have carpet_area values that denote square meters rather than square feet.",
+      "how_found": "Identified properties with mathematically impossible square footage (e.g., < 250 sqft) for multi-bedroom houses.",
+      "impact": "Calculations for price-per-sqft are massively skewed and inflated unless the units are converted client-side.",
+      "evidence": ["MAG-3001519", "MAG-3001327"]
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "units",
+      "documented": "price_min and price_max are in rupees, integer, everywhere in the API.",
+      "actual": "price_max returns a small floating-point number representing a larger denomination (like millions or crores) instead of raw integers.",
+      "how_found": "Calculated the costliest project and found a mathematically impossible raw rupee value of 97.8.",
+      "impact": "Frontend sorting or display of project prices will show completely wrong values to users unless mathematically scaled up.",
+      "evidence": ["P30015"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "fraud",
+      "documented": "is_verified means our operations team has checked the listing. Anything this endpoint returns is safe to show to a user.",
+      "actual": "Multiple 'verified' listings contain obvious real estate scam text demanding upfront token or booking amounts before site visits.",
+      "how_found": "Searched listing descriptions for scam patterns like 'token amount' and 'booking amount'.",
+      "impact": "Users could be actively scammed by fraudulent posts; frontend needs to filter these out client-side.",
+      "evidence": ["ZER-3001479", "ZER-3003489", "MAG-3000989"]
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "consistency",
+      "documented": "total_listings is recomputed whenever a listing is added or withdrawn, so it always agrees with what GET /v1/listings?project_id=... returns.",
+      "actual": "The total_listings count is demonstrably incorrect for exactly 126 different projects when compared to the raw listings data.",
+      "how_found": "Cross-referenced actual project_id counts downloaded from /v1/listings against the total_listings field provided in /v1/projects.",
+      "impact": "Displaying the API's project counts directly to users will show wildly inaccurate inventory availability.",
+      "evidence": ["P30015"]
+    },
+    {
+      "endpoint": "/v1/analytics/summary",
+      "category": "missing_endpoint",
+      "documented": "Pre-computed aggregates for your city — handy for a dashboard screen.",
+      "actual": "The endpoint returns a 404 Not Found error and is completely unreachable.",
+      "how_found": "Attempted to fetch data directly for the Insights dashboard component and received an HTTP 404 error.",
+      "impact": "The frontend application must calculate all analytics manually from the raw listings dataset to display any insights.",
+      "evidence": []
+    }
+  ]
+}
