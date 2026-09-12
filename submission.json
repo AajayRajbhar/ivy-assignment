@@ -1,10 +1,11 @@
 {
+  
   "api_key": "IVY26-6E629ED6FBB5",
   "candidate": {
     "name": "AJAY RAJBHAR",
     "email": "ajay.20233032@mnnit.ac.in",
     "repo_url": "https://github.com/AajayRajbhar/ivy-assignment",
-    "demo_url": "https://your-app.vercel.app"
+    "demo_url": "https://ivy-assignment-psi.vercel.app"
   },
   "answers": {
     "dataset_audit_ref": "IVY-AUDIT-64433F76",
